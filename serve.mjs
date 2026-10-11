@@ -1,0 +1,6 @@
+import {createServer} from 'node:http';
+import {readFile} from 'node:fs/promises';
+import path from 'node:path';
+const root=path.resolve('public');
+const mime={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.mjs':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.svg':'image/svg+xml','.txt':'text/plain; charset=utf-8','.xml':'application/xml; charset=utf-8','.json':'application/json'};
+createServer(async(req,res)=>{let file;try{let p=decodeURIComponent(new URL(req.url,'http://localhost').pathname);if(p.endsWith('/'))p+='index.html';file=path.resolve(root,'.'+p);if(!file.startsWith(root+path.sep))throw Error();const data=await readFile(file);res.writeHead(200,{'Content-Type':mime[path.extname(file)]||'application/octet-stream','X-Content-Type-Options':'nosniff'});res.end(data);}catch{res.writeHead(404,{'Content-Type':'text/html; charset=utf-8'});res.end(await readFile(path.join(root,'404.html')));}}).listen(4193,'127.0.0.1',()=>console.log('LectureBrief http://127.0.0.1:4193'));

@@ -1,0 +1,6 @@
+// Audio remains in this browser worker. No inference API is called.
+import {pipeline,env} from 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2';
+env.allowLocalModels=false;
+env.backends.onnx.wasm.numThreads=1;
+const time=seconds=>{const n=Math.max(0,Math.floor(seconds||0));return String(Math.floor(n/60)).padStart(2,'0')+':'+String(n%60).padStart(2,'0');};
+self.onmessage=async({data})=>{try{self.postMessage({type:'progress',message:'전사 모델 내려받는 중 · 첫 실행은 시간이 걸립니다.',progress:0});const transcriber=await pipeline('automatic-speech-recognition',data.model,{quantized:true,progress_callback:p=>{if(p.status==='progress')self.postMessage({type:'progress',message:'모델 준비 중 · '+Math.round(p.progress||0)+'%',progress:p.progress||0});}});self.postMessage({type:'progress',message:'한국어 녹음 전사 중 · 파일이 길수록 시간이 걸립니다.',progress:100});const output=await transcriber(data.audio,{language:'korean',task:'transcribe',chunk_length_s:30,stride_length_s:5,return_timestamps:true});const text=output.chunks?.length?output.chunks.map(c=>'['+time(c.timestamp?.[0])+'] '+c.text.trim()).join('\n'):output.text;self.postMessage({type:'done',text});await transcriber.dispose();}catch(e){self.postMessage({type:'error',message:e.message||'모델 실행 오류'});}};
