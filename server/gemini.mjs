@@ -2,8 +2,7 @@ import {promptFor,parseResult,MAX_TEXT} from '../public/core.mjs';
 const json=(data,status=200)=>new Response(JSON.stringify(data),{status,headers:{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'}});
 const obj=properties=>({type:'object',properties,required:Object.keys(properties)}),str={type:'string'},arr=items=>({type:'array',items});
 export const schema=obj({summary:str,sections:arr(obj({title:str,body:str,evidence:str})),notices:arr(obj({title:str,body:str,due:str,evidence:str,needsCheck:{type:'boolean'}})),progress:obj({completed:str,next:str,preparation:str,evidence:str}),questions:arr(str)});
-const ready=env=>!!(env.GEMINI_API_KEY&&env.LECTURE_ACCESS_CODE?.length>=20);
-async function same(a,b){const hash=async s=>new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(s)));const [x,y]=await Promise.all([hash(a),hash(b)]);let difference=0;for(let i=0;i<x.length;i++)difference|=x[i]^y[i];return difference===0;}
+const ready=env=>!!(env.GEMINI_API_KEY);
 async function bodyLimited(request){const reader=request.body?.getReader();if(!reader)throw Error('empty');let size=0;const chunks=[];try{while(true){const {done,value}=await reader.read();if(done)break;size+=value.byteLength;if(size>1500000)throw Error('large');chunks.push(value);}const bytes=new Uint8Array(size);let offset=0;for(const c of chunks){bytes.set(c,offset);offset+=c.length;}return JSON.parse(new TextDecoder().decode(bytes));}finally{reader.releaseLock();}}
 export async function handle({request,env},fetcher=fetch){
  const url=new URL(request.url);if(url.origin!=='https://lecturebrief.pages.dev')return json({error:'정식 사이트에서 사용해 주세요.'},403);
@@ -12,7 +11,6 @@ export async function handle({request,env},fetcher=fetch){
  if(request.method!=='POST')return json({error:'POST 요청이 필요합니다.'},405);
  if(request.headers.get('Origin')!==url.origin||!request.headers.get('Content-Type')?.startsWith('application/json'))return json({error:'요청 출처를 확인할 수 없습니다.'},403);
  if(!ready(env))return json({error:'운영자가 Gemini 서버 비밀 설정을 완료해야 합니다.'},503);
- const code=request.headers.get('X-Lecture-Access')||'';if(code.length>200||!(await same(code,env.LECTURE_ACCESS_CODE)))return json({error:'이용 코드를 확인해 주세요.'},401);
  let input;try{input=await bodyLimited(request);if(!input||typeof input.transcript!=='string'||!input.transcript.trim()||input.transcript.length>MAX_TEXT)throw Error('input');for(const [name,max] of [['course',120],['date',10],['session',80],['syllabus',50000]])if(input[name]!=null&&(typeof input[name]!=='string'||input[name].length>max))throw Error('input');}catch{return json({error:'전사문과 수업 정보의 형식·길이를 확인해 주세요.'},400);}
  const model=env.GEMINI_MODEL||'gemini-3.8-flash';if(!/^gemini-[a-zA-Z0-9.-]+$/.test(model))return json({error:'서버 모델 설정을 확인해 주세요.'},503);
  try{
