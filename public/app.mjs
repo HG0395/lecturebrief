@@ -1,3 +1,4 @@
+import {reportHtml} from './report.mjs';
 import {MAX_TEXT,promptFor,parseResult,sampleTranscript,sampleResult,noticeText,noticeHtml,markdown,calendar,escapeHtml,transcriptionWarning} from './core.mjs';
 const $=id=>document.getElementById(id), key='lecturebrief-library-v1';
 let sourceKind='audio';
@@ -20,6 +21,7 @@ document.querySelectorAll('[role=tab]').forEach((t,i)=>{t.addEventListener('clic
 $('transcript').addEventListener('input',count);
 $('download-transcript').addEventListener('click',act(()=>{if(!$('transcript').value.trim())throw Error('저장할 전사문이 없습니다.');download((meta().course||'수업')+'_전사문.txt',$('transcript').value);}));
 $('import-result').addEventListener('click',act(async()=>{const parsed=parseResult($('result-input').value);if(result&&!(await ask('현재 정리 결과를 새 결과로 바꿀까요?')))return;result=parsed;renderResult();selectTab(0);$('results').scrollIntoView({behavior:'smooth'});notify('정리 결과를 가져왔습니다. 공지는 원문을 확인한 뒤 검토 완료로 표시하세요.');}));
+$('export-pdf').addEventListener('click',act(()=>{requireResult();document.getElementById('print-report')?.remove();const report=document.createElement('div');report.id='print-report';report.innerHTML=reportHtml(result,meta(),{demo});document.body.append(report);const title=document.title;document.title=(meta().course||'수업').replace(/[<>:"/\\|?*]/g,'_')+'_강의정리';const restore=()=>{document.title=title;report.remove();};window.addEventListener('afterprint',restore,{once:true});try{window.print();}catch(error){window.removeEventListener('afterprint',restore);restore();throw error;}}));
 $('export-md').addEventListener('click',act(()=>{requireResult();download((meta().course||'수업')+'_강의정리.md',markdown(result,meta()),'text/markdown;charset=utf-8');}));
 $('save-session').addEventListener('click',act(()=>{requireResult();const list=readLibrary();const item={id:activeId||crypto.randomUUID(),meta:meta(),transcript:$('transcript').value,syllabus:$('syllabus').value,result,demo};const idx=list.findIndex(x=>x.id===item.id);if(idx>=0)list[idx]=item;else list.unshift(item);try{localStorage.setItem(key,JSON.stringify(list));}catch{throw Error('기기 저장 공간이 부족하거나 저장이 차단됐습니다. 정리 파일로 내려받아 보관해 주세요.');}activeId=item.id;renderLibrary();notify('이 브라우저에 저장했습니다. 다른 기기에는 동기화되지 않습니다.');}));
 function hasWork(){return !!(result||$('transcript').value||$('result-input').value||audioFile);}
