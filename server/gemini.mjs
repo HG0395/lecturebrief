@@ -1,0 +1,24 @@
+import {promptFor,parseResult,MAX_TEXT} from '../public/core.mjs';
+const json=(data,status=200)=>new Response(JSON.stringify(data),{status,headers:{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'}});
+const obj=properties=>({type:'object',properties,required:Object.keys(properties)}),str={type:'string'},arr=items=>({type:'array',items});
+export const schema=obj({summary:str,sections:arr(obj({title:str,body:str,evidence:str})),notices:arr(obj({title:str,body:str,due:str,evidence:str,needsCheck:{type:'boolean'}})),progress:obj({completed:str,next:str,preparation:str,evidence:str}),questions:arr(str)});
+const ready=env=>!!(env.GEMINI_API_KEY&&env.LECTURE_ACCESS_CODE?.length>=20);
+async function same(a,b){const hash=async s=>new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(s)));const [x,y]=await Promise.all([hash(a),hash(b)]);let difference=0;for(let i=0;i<x.length;i++)difference|=x[i]^y[i];return difference===0;}
+async function bodyLimited(request){const reader=request.body?.getReader();if(!reader)throw Error('empty');let size=0;const chunks=[];try{while(true){const {done,value}=await reader.read();if(done)break;size+=value.byteLength;if(size>1500000)throw Error('large');chunks.push(value);}const bytes=new Uint8Array(size);let offset=0;for(const c of chunks){bytes.set(c,offset);offset+=c.length;}return JSON.parse(new TextDecoder().decode(bytes));}finally{reader.releaseLock();}}
+export async function handle({request,env},fetcher=fetch){
+ const url=new URL(request.url);if(url.origin!=='https://lecturebrief.pages.dev')return json({error:'정식 사이트에서 사용해 주세요.'},403);
+ if(url.pathname==='/api/ai/status'&&request.method==='GET')return json({configured:ready(env)});
+ if(url.pathname!=='/api/ai/summarize')return json({error:'존재하지 않는 기능입니다.'},404);
+ if(request.method!=='POST')return json({error:'POST 요청이 필요합니다.'},405);
+ if(request.headers.get('Origin')!==url.origin||!request.headers.get('Content-Type')?.startsWith('application/json'))return json({error:'요청 출처를 확인할 수 없습니다.'},403);
+ if(!ready(env))return json({error:'운영자가 Gemini 서버 비밀 설정을 완료해야 합니다.'},503);
+ const code=request.headers.get('X-Lecture-Access')||'';if(code.length>200||!(await same(code,env.LECTURE_ACCESS_CODE)))return json({error:'이용 코드를 확인해 주세요.'},401);
+ let input;try{input=await bodyLimited(request);if(!input||typeof input.transcript!=='string'||!input.transcript.trim()||input.transcript.length>MAX_TEXT)throw Error('input');for(const [name,max] of [['course',120],['date',10],['session',80],['syllabus',50000]])if(input[name]!=null&&(typeof input[name]!=='string'||input[name].length>max))throw Error('input');}catch{return json({error:'전사문과 수업 정보의 형식·길이를 확인해 주세요.'},400);}
+ const model=env.GEMINI_MODEL||'gemini-3.8-flash';if(!/^gemini-[a-zA-Z0-9.-]+$/.test(model))return json({error:'서버 모델 설정을 확인해 주세요.'},503);
+ try{
+  const upstream=await fetcher(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,{method:'POST',redirect:'error',signal:AbortSignal.timeout(120000),headers:{'Content-Type':'application/json','x-goog-api-key':env.GEMINI_API_KEY},body:JSON.stringify({contents:[{role:'user',parts:[{text:promptFor(input)}]}],generationConfig:{temperature:0.2,maxOutputTokens:16384,responseFormat:{text:{mimeType:'application/json',schema}}}})});
+  if(!upstream.ok)return json({error:upstream.status===429?'Google 사용 한도에 도달했습니다. 운영자의 한도·결제 설정을 확인하고 잠시 후 시도하세요.':upstream.status===401||upstream.status===403?'운영자의 Google API 키·권한 설정을 확인해야 합니다.':'Google 정리 요청에 실패했습니다. 모델 설정과 서비스 상태를 확인하세요.'},upstream.status===429?429:502);
+  const data=await upstream.json(),candidate=data.candidates?.[0];if(candidate?.finishReason!=='STOP')return json({error:'정리 결과가 중단되었거나 생성되지 않았습니다. 전사문을 나누거나 내용을 확인해 주세요.'},502);
+  const raw=candidate.content?.parts?.filter(p=>!p.thought).map(p=>p.text||'').join('');if(!raw)throw Error('empty');return json({result:parseResult(raw)});
+ }catch{return json({error:'정리를 완료하지 못했습니다. 기존 작업은 유지됩니다. 자동 재시도하지 않으니 사용량을 확인한 뒤 다시 시도하세요.'},502);}
+}

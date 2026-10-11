@@ -1,37 +1,24 @@
-# LectureBrief · 강의 정리 작업실
+# LectureBrief
 
-API 키 없이 녹음 전사 → 교수님의 Claude 웹/앱 → 강의 전체 정리·검토된 공지·진도 기록으로 이어지는 어두운 테마의 반응형 도구입니다. Claude 또는 Anthropic의 공식 제품이 아닙니다.
+녹음 파일 또는 TXT/SRT/VTT 전사문을 선택하고 Google Gemini로 강의 정리·공지·진도를 생성하는 반응형 작업실입니다. 학교 계정 연결·자동 공지 게시·광고는 없습니다.
 
-## 실행
+## 실행과 배포
 
-Node.js 22 이상에서 `npm run dev` 후 http://127.0.0.1:4193 을 엽니다. `npm test`는 핵심 처리 검증, `npm run build`는 정적 파일·내부 링크 검사입니다. 설치할 npm 의존성은 없습니다. 파일 더블클릭 대신 HTTP 서버를 사용하세요.
+Node.js 22 이상에서 npm run dev, http://127.0.0.1:4193 접속. npm 의존성 설치 불필요. 로컬 정적 서버에서는 Gemini 연결이 설정 대기로 표시됩니다. npm test는 핵심 처리와 서버 모의 검증, npm run build는 정적 파일·링크 검사입니다.
 
-## 실제 기능
+GitHub: https://github.com/HG0395/lecturebrief · 공개 사이트: https://lecturebrief.pages.dev/
+Cloudflare Pages main 자동 배포, 빌드 npm run build, 출력 public, 루트 저장소 루트. functions/와 server/는 Pages Functions 서버 코드이며 public 밖에 보관합니다.
 
-- 오디오 파일(최대 100MB, 2시간) 브라우저 전사: Transformers.js 2.17.2 / Whisper Tiny·Base, 한국어·영어·자동 감지, Web Worker, 중단 지원. 반복 구절 감지 시 확인 안내를 표시합니다. 모든 오인식을 감지하지는 않습니다. 모델은 첫 실행 때 외부 CDN에서 다운로드합니다.
-- TXT/SRT/VTT 가져오기, 타임스탬프 유지, 편집과 전사문 다운로드
-- 과목·날짜·주차·선택한 강의계획서가 포함된 Claude 요청문 복사. 계정·API 연결이나 자동 메시지 전송은 없습니다.
-- 구조화된 JSON 결과 가져오기, 전체 요약·주제별 상세 정리·공지·진도 편집
-- 원문 대조 후 검토 완료한 공지만 일반 텍스트/LMS HTML 복사, TXT·종일 ICS 저장, 기기 공유 메뉴
-- 명시적으로 저장한 강의만 localStorage 보관, 다시 열기·삭제. 오디오 원본은 저장하지 않습니다.
-- 모바일·키보드 탭 탐색, 입력 레이블, 상태 안내, 데이터 안내·가이드·FAQ·공개 GitHub 문의
+## Gemini 설정
 
-AI 요약은 사용자의 Claude에서 수행합니다. Claude 요금제 제한과 인터넷 데이터 비용은 별개입니다. 전사와 결과의 정확성을 보장하지 않습니다. 실제 수업 녹음·개인정보를 이 공개 저장소에 올리지 마세요.
+Cloudflare → lecturebrief → Settings → Variables and secrets → Production에서 다음을 설정하고 재배포합니다. 키를 채팅·소스·GitHub에 넣지 마세요.
 
-## Cloudflare Pages
+- GEMINI_API_KEY: 재발급한 Google AI Studio API 키, Secret 유형.
+- LECTURE_ACCESS_CODE: 무작위 20자 이상의 교수자용 이용 코드, Secret 유형. 일반 사용자에게는 이 코드만 안전하게 전달합니다. 누구나 공개 API 비용을 소비하지 못하도록 필수입니다.
+- GEMINI_MODEL: 선택 설정. 기본 gemini-3.8-flash. Google 프로젝트에서 제공되는 generateContent·구조화 JSON 지원 모델을 사용하세요.
 
-- GitHub repository: https://github.com/HG0395/lecturebrief
-- Production branch: `main`
-- Framework preset: None
-- Build command: `npm run build`
-- Build output directory: `public`
-- Root directory: repository root (empty)
-- GitHub 자동 배포 활성화. 별도의 추론 API나 환경변수는 필요 없습니다.
+채팅 등에 노출된 API 키는 폐기·재발급합니다. Google 프로젝트에서 API 제한·사용량·결제 한도를 관리하세요. 무료 이용을 보장하지 않습니다. API 키를 브라우저에 전달하거나 공개 API를 무인증으로 열지 않습니다. 이용 코드는 브라우저 저장소에 저장하지 않습니다. 유효한 키 설정 전에는 실제 생성 검증이 불가능합니다.
 
-모든 실행 파일은 `public/`에 있습니다. 생성된 HTML도 커밋하므로 Cloudflare 빌드가 콘텐츠를 생성할 필요는 없습니다. 설명 페이지 수정은 `create-pages.mjs`에 반영한 뒤 `node create-pages.mjs`로 HTML을 갱신하세요.
+전사 모델은 브라우저에서 실행하며 녹음 원본을 Google로 보내지 않습니다. 정리 버튼을 누르면 전사문과 수업 정보는 서버를 거쳐 Google로 전달됩니다. 결과 공지는 항상 미검토 상태이며 원문 대조 후 공유할 수 있습니다. 기기 저장 기록은 암호화되지 않습니다. 실제 처리와 한계는 public/guide.html, public/faq.html, public/privacy.html을 참고하세요.
 
-## 데이터와 광고
-
-광고 스크립트·계정 확인 태그·광고 선택 UI·ads.txt의 게시자 정보를 제거했습니다. 광고를 게재하지 않습니다. 과거 파일이 CDN 캐시에 남지 않도록 consent.js는 실행 코드 없는 주석, ads.txt는 판매자 정보 없는 주석으로 교체했습니다. 두 파일은 페이지에서 불러오지 않습니다. 기존 광고 선택 값은 작업실을 다시 열면 제거됩니다. 저장한 강의 기록은 유지합니다.
-
-녹음 전사는 브라우저에서 실행되지만 모델·라이브러리·글꼴 다운로드에는 외부 통신이 있습니다. 기기에 저장한 강의 기록은 암호화되지 않으므로 공용 기기에서는 저장을 피하세요. 자세한 내용은 데이터 사용 안내를 참고하세요.
+설정 후 가상 전사문으로 정리 생성·결과 검토·잘못된 이용 코드 거부를 확인하세요. 실제 강의와 개인정보를 테스트나 공개 저장소에 올리지 마세요. 소스와 모의 테스트만으로 실제 모델 정확성·요금을 보증하지 않습니다.
