@@ -4,7 +4,7 @@ const obj=properties=>({type:'object',properties,required:Object.keys(properties
 export const schema=obj({summary:str,sections:arr(obj({title:str,body:str,evidence:str})),notices:arr(obj({title:str,body:str,due:str,evidence:str,needsCheck:{type:'boolean'}})),progress:obj({completed:str,next:str,preparation:str,evidence:str}),questions:arr(str)});
 const ready=env=>!!(env.GEMINI_API_KEY);
 async function bodyLimited(request){const reader=request.body?.getReader();if(!reader)throw Error('empty');let size=0;const chunks=[];try{while(true){const {done,value}=await reader.read();if(done)break;size+=value.byteLength;if(size>1500000)throw Error('large');chunks.push(value);}const bytes=new Uint8Array(size);let offset=0;for(const c of chunks){bytes.set(c,offset);offset+=c.length;}return JSON.parse(new TextDecoder().decode(bytes));}finally{reader.releaseLock();}}
-export async function handle({request,env},fetcher=fetch){
+export async function handle({request,env},fetcher=(...args)=>fetch(...args)){
  const url=new URL(request.url);if(url.origin!=='https://lecturebrief.pages.dev')return json({error:'정식 사이트에서 사용해 주세요.'},403);
  if(url.pathname==='/api/ai/status'&&request.method==='GET')return json({configured:ready(env)});
  if(url.pathname!=='/api/ai/summarize')return json({error:'존재하지 않는 기능입니다.'},404);
